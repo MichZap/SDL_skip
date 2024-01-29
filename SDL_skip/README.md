@@ -8,4 +8,5 @@ conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 cudatoolkit
 conda install pandas
 conda install -c anaconda scikit-learn
 conda install -c conda-forge plyfile
+conda install pyg -c pyg
 ```
