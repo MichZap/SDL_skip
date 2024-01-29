@@ -10,3 +10,7 @@ conda install -c anaconda scikit-learn
 conda install -c conda-forge plyfile
 conda install pyg -c pyg
 ```
+
+Model can be trained by running main.py.
+Depending on the data we recommend running procrustes_ply(Data,folder) from utilis beforehand to align the data.
+Eigenvalues and eigenvecors should also be calucalted beforehand. Use spectral_decomp.py to achieve that.
