@@ -107,3 +107,29 @@ class EUCLoss(torch.nn.Module):
         loss = F.mse_loss(inputs, targets, reduction="none")
         loss = torch.mean(torch.sqrt(torch.sum(loss,axis =2)))
         return loss
+    
+class Mesh(object): 
+    def __init__(self,
+                 v=None,
+                 f=None,
+                 filename=None,
+                 ):
+        
+        if filename==None:
+            self.v=v
+            self.f=f
+        else:  
+            self.v,self.f=self.read(filename)
+        
+        
+    def read(self,filename):
+        
+        ply=PlyData.read(filename)
+        
+        vertex=ply["vertex"]
+        face=ply["face"]['vertex_indices']
+        
+        v=np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
+        f=np.stack(face,axis=0)
+        
+        return v,f

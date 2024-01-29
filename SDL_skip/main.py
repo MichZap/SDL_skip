@@ -22,7 +22,7 @@ config = {
   "hidden_dim": [64]*7,
   "conv_size": [1024]*7,
   "prior_coef": 0.4,
-  "use_activation":2,
+  "use_activation":0,
   "dropout":0,
   "activation": "ELU",
   "use_conv": True,
