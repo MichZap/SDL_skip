@@ -6,7 +6,7 @@ from model_utilis import generate_inverse_series, IterativeSkip, MultiHeadAtt, a
 
 
 class SkipBlockD(nn.Module):
-    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset =True, use_soft = False, use_att = False, aw = False, Skip = 2, n_heads = 0 ):
+    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset =True, use_soft = False, use_att = False, aw = False, Skip = 2, n_heads = 0, value = True ):
         super(SkipBlockD, self).__init__()
         
         d = 4 if use_eigenvals else 3
@@ -37,7 +37,7 @@ class SkipBlockD(nn.Module):
                 self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
                 self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
             else:
-                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi)
+                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
 
             
         self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
@@ -142,7 +142,7 @@ class SkipBlockD(nn.Module):
             torch.nn.init.xavier_uniform_(self.l4.weight, gain=1.0)
 
 class SkipBlockU(nn.Module):
-    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset = True, use_soft= False,use_att = False, aw = False, Skip = 2, n_heads = 0):
+    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset = True, use_soft= False,use_att = False, aw = False, Skip = 2, n_heads = 0, value = True):
         super(SkipBlockU, self).__init__()
         
         d = 4 if use_eigenvals else 3
@@ -171,7 +171,7 @@ class SkipBlockU(nn.Module):
                 self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
                 self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
             else:
-                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi)
+                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
         
 
             
@@ -317,6 +317,7 @@ class SDL_skip(nn.Module):
                 aw = opt["aw"] if "aw" in opt else False,
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
+                value = opt["value"] if "value" in opt else True,
                 
             )
             for i in range(len(Spectral_M_down))]
@@ -343,6 +344,7 @@ class SDL_skip(nn.Module):
                 aw = opt["aw"] if "aw" in opt else False,
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
+                value = opt["value"] if "value" in opt else True,
             )
             for i in range(len(Spectral_M_down))]
         )

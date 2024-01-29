@@ -28,8 +28,8 @@ config = {
   "use_conv": True,
   "use_eigenvals":False,
   "use_norm":False,
-  "use_att":False,
-  "n_heads":0,
+  "use_att":True,
+  "n_heads":1,
   "bias":False,
   "p":0,
   "reset":True,
@@ -40,7 +40,8 @@ config = {
   "print_epoch":25,
   "shed_pat":25,
   "es_pat":100,
-  "Skip":2,
+  "Skip":1,
+  "value":False,
 }
 
 

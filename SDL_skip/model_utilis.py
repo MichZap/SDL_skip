@@ -107,13 +107,13 @@ class SwiGLU(nn.Module):
 
 
 class Att(nn.Module):
-    def __init__(self,hidden_dim,in_channels,out_channels,p,use_norm):
+    def __init__(self,hidden_dim,in_channels,out_channels,p,use_norm,value=True):
         super(Att, self).__init__()
         
         
         self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
         self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-        self.value = nn.Linear(3, 3,bias = False)
+        self.value = nn.Linear(3, 3,bias = False) if value else nn.Identity()
         self.norm = (lambda x: torch.nn.functional.normalize(x, p=1, dim=1)) if use_norm else nn.Identity()
         self.dropout = nn.Dropout(p=p)
         self.reset_parameters()
@@ -130,11 +130,12 @@ class Att(nn.Module):
         
         torch.nn.init.xavier_uniform_(self.key)
         torch.nn.init.xavier_uniform_(self.query)
-        torch.nn.init.xavier_uniform_(self.value.weight)
+        if isinstance(self.value, nn.Linear):
+            torch.nn.init.xavier_uniform_(self.value.weight)
 
         
 class MultiHeadAtt(nn.Module):
-    def __init__(self,hidden_dim,n_heads,p,use_norm,phi):
+    def __init__(self,hidden_dim,n_heads,p,use_norm,phi,value = True):
         super(MultiHeadAtt, self).__init__()
         
         in_channels = phi.size(1)
@@ -142,11 +143,12 @@ class MultiHeadAtt(nn.Module):
         hd = int(hidden_dim/n_heads)
         
         self.phi = phi 
-        self.heads = nn.ModuleList([Att(hd,in_channels,out_channels,p,use_norm) for _ in range(n_heads)])
-        self.value = nn.Linear(3, 3,bias = False)
+        self.heads = nn.ModuleList([Att(hd,in_channels,out_channels,p,use_norm,value) for _ in range(n_heads)])
+        self.value = nn.Linear(3, 3,bias = False) if value else nn.Identity()
         self.proj = nn.Linear(3 * (n_heads+1), 3)
         self.dropout = nn.Dropout(p=p)
-        self.reset_parameters()
+        if value:
+            self.reset_parameters()
     
     def forward(self,x):
     
