@@ -1,6 +1,6 @@
 # SDL_skip
 
-Tested with Python = 3.10.13 and Anaconda on Windows 10
+Tested with Python 3.10.13 and Anaconda on Windows 10
 
 Commands to install requirements in Anaconda:
 ```
