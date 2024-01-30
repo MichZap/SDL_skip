@@ -1,5 +1,7 @@
 # SDL_skip
 
+![Architecture!](/Image/DownsampleBlock.drawio4(1).svg "Architecture")
+
 Tested with Python 3.10.13 and Anaconda on Windows 10
 
 Commands to install requirements in Anaconda:

@@ -28,8 +28,8 @@ config = {
   "use_conv": True,             # use linear(4,c) and linear(c,3) from illustration
   "use_eigenvals":True,         # use eigenvalue encoding
   "use_norm":False,             # use LayerNorm before every block of linear layers
-  "use_att":False,              # use Attention-Matrix for pooling
-  "n_heads":1,                  # in case of use_att True determine the number of heads, n_heads = 0 and n_heads = 1 slightly different implementation
+  "use_att":True,              # use Attention-Matrix for pooling
+  "n_heads":0,                  # in case of use_att True determine the number of heads, n_heads = 0 and n_heads = 1 slightly different implementation
   "value":True,                 # in case of multihead attention, use additional 3x3 value matrix
   "bias":False,                 # use bias for linear layers
   "p":0,                        # augmentation probability for flipping and rotation per axis
