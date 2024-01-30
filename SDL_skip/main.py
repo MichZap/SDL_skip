@@ -26,9 +26,9 @@ config = {
   "dropout":0,
   "activation": "ELU",
   "use_conv": True,
-  "use_eigenvals":False,
+  "use_eigenvals":True,
   "use_norm":False,
-  "use_att":True,
+  "use_att":False,
   "n_heads":1,
   "bias":False,
   "p":0,
@@ -40,8 +40,9 @@ config = {
   "print_epoch":25,
   "shed_pat":25,
   "es_pat":100,
-  "Skip":1,
-  "value":False,
+  "Skip":2,
+  "value":True,
+  "learn":False,
 }
 
 

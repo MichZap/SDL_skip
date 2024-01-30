@@ -1,13 +1,19 @@
 import torch
 import torch.nn as nn
 import math
+import numpy as np
 from model_utilis import generate_inverse_series, IterativeSkip, MultiHeadAtt, activation_func
 
 
 
 class SkipBlockD(nn.Module):
-    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset =True, use_soft = False, use_att = False, aw = False, Skip = 2, n_heads = 0, value = True ):
+    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0,
+                 use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset =True, use_soft = False,
+                 use_att = False, aw = False, Skip = 2, n_heads = 0, value = True, learn = True ):
         super(SkipBlockD, self).__init__()
+        
+        self.learn = learn
+        
         
         d = 4 if use_eigenvals else 3
         
@@ -25,50 +31,55 @@ class SkipBlockD(nn.Module):
             
         self.use_att = use_att
         self.use_soft = use_soft
-        self.n_heads = n_heads
-           
-        
-        if use_att == False:
-            self.l1 = nn.Linear(in_channels, hidden_dim ,bias)
-            self.l2 = nn.Linear(hidden_dim, out_channels ,bias)
-        else:
-            if n_heads == 0:
-                self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
-                self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-                self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
-            else:
-                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
-
-            
-        self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
-        self.l4 = nn.Linear(conv_size_in, 3 ,bias) if use_conv else nn.Identity()
-        self.activation1 = activation if use_activation >= 1 else nn.Identity()
-        self.activation2 = activation if use_activation >= 2 else nn.Identity()
-        self.activation3 = activation if use_activation == -1 else nn.Identity()
-        self.dropout = nn.Dropout(p=dropout)
-        self.norm1 = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
-        self.norm2 = nn.LayerNorm(d) if use_norm else nn.Identity()
-        self.soft = nn.Softmax(dim=2) if use_soft else nn.Identity()
-        
+        self.n_heads = n_heads 
         self.phi = phi
         self.eigv = eig_vals[:out_channels]
         self.use_eigenvals = use_eigenvals
-        
         self.aw = aw
+        self.Skip = Skip
+           
+        if learn:
+            if use_att == False:
+                self.l1 = nn.Linear(in_channels, hidden_dim ,bias)
+                self.l2 = nn.Linear(hidden_dim, out_channels ,bias)
+            else:
+                if n_heads == 0:
+                    self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
+                    self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
+                    self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
+                else:
+                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
+    
+                
+            self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
+            self.l4 = nn.Linear(conv_size_in, 3 ,bias) if use_conv else nn.Identity()
+            self.activation1 = activation if use_activation >= 1 else nn.Identity()
+            self.activation2 = activation if use_activation >= 2 else nn.Identity()
+            self.activation3 = activation if use_activation == -1 else nn.Identity()
+            self.dropout = nn.Dropout(p=dropout)
+            self.norm1 = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
+            self.norm2 = nn.LayerNorm(d) if use_norm else nn.Identity()
+            self.soft = nn.Softmax(dim=2) if use_soft else nn.Identity()
+            self.weights = nn.Parameter(torch.Tensor(2, 1))
+            if reset:
+                self.reset_parameters()
+            nn.init.constant_(self.weights, prior_coef)
+        
+
         
         if aw:
             self.weight = nn.Parameter(torch.Tensor(1, 1))
             nn.init.constant_(self.weight, 1)
-        self.weights = nn.Parameter(torch.Tensor(2, 1))
-        if reset:
-            self.reset_parameters()
-        nn.init.constant_(self.weights, prior_coef)
+            
+
         
-        self.Skip = Skip
 
             
 
     def forward(self, x):
+        
+        if self.learn == False:
+            return self.weight * torch.matmul(self.phi,x)
         
         if self.Skip >= 1:
             z = torch.matmul(self.phi,x)
@@ -142,8 +153,12 @@ class SkipBlockD(nn.Module):
             torch.nn.init.xavier_uniform_(self.l4.weight, gain=1.0)
 
 class SkipBlockU(nn.Module):
-    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0, use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset = True, use_soft= False,use_att = False, aw = False, Skip = 2, n_heads = 0, value = True):
+    def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0,
+                 use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset = True, use_soft= False,
+                 use_att = False, aw = False, Skip = 2, n_heads = 0, value = True, learn = True ):
         super(SkipBlockU, self).__init__()
+        
+        self.learn = learn
         
         d = 4 if use_eigenvals else 3
         if activation == "SwiGLU" and use_activation == -1:
@@ -161,46 +176,52 @@ class SkipBlockU(nn.Module):
         self.use_att = use_att
         self.use_soft = use_soft
         self.n_heads = n_heads
-        
-        if use_att == False:
-            self.l1 = nn.Linear(in_channels, hidden_dim ,bias)
-            self.l2 = nn.Linear(hidden_dim, out_channels ,bias)
-        else:
-            if n_heads == 0:
-                self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
-                self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-                self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
-            else:
-                self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
-        
-
-            
-        self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
-        self.l4 = nn.Linear(conv_size_in, 3 ,bias) if use_conv else nn.Identity()
-        self.activation1 = activation if use_activation >= 1 else nn.Identity()
-        self.activation2 = activation if use_activation == 2 else nn.Identity()
-        self.activation3 = activation if use_activation == -1 else nn.Identity()
-        self.dropout = nn.Dropout(p=dropout)
-        self.norm1 = nn.LayerNorm(d) if use_norm else nn.Identity()
-        self.norm2 = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
-        self.soft = nn.Softmax(dim=2) if use_soft else nn.Identity()
-        
         self.phi = phi
         self.eigv = eig_vals[:in_channels]
         self.use_eigenvals = use_eigenvals
         self.aw = aw
+        self.Skip = Skip
+        
+        if learn:      
+            if use_att == False:
+                self.l1 = nn.Linear(in_channels, hidden_dim ,bias)
+                self.l2 = nn.Linear(hidden_dim, out_channels ,bias)
+            else:
+                if n_heads == 0:
+                    self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
+                    self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
+                    self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
+                else:
+                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
+            
+    
+                
+            self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
+            self.l4 = nn.Linear(conv_size_in, 3 ,bias) if use_conv else nn.Identity()
+            self.activation1 = activation if use_activation >= 1 else nn.Identity()
+            self.activation2 = activation if use_activation == 2 else nn.Identity()
+            self.activation3 = activation if use_activation == -1 else nn.Identity()
+            self.dropout = nn.Dropout(p=dropout)
+            self.norm1 = nn.LayerNorm(d) if use_norm else nn.Identity()
+            self.norm2 = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
+            self.soft = nn.Softmax(dim=2) if use_soft else nn.Identity()
+            self.weights = nn.Parameter(torch.Tensor(2, 1))
+            if reset:
+                self.reset_parameters()
+            nn.init.constant_(self.weights, prior_coef)
+        
+
         if aw:
             self.weight = nn.Parameter(torch.Tensor(1, 1))
             nn.init.constant_(self.weight, 1)
-        self.weights = nn.Parameter(torch.Tensor(2, 1))
-        if reset:
-            self.reset_parameters()
-        nn.init.constant_(self.weights, prior_coef)
-        self.Skip = Skip
+        
    
             
 
     def forward(self, x):
+        
+        if self.learn == False:
+            return self.weight * torch.matmul(self.phi,x)
         
         y = x
         if self.use_eigenvals:
@@ -294,7 +315,15 @@ class SDL_skip(nn.Module):
         del phi
         torch.cuda.empty_cache()
         
-        eig_vals = torch.tensor(eig_vals,device = opt["device"],requires_grad=False)                 
+        eig_vals = torch.tensor(eig_vals,device = opt["device"],requires_grad=False)
+
+        learn = opt["learn"] if "learn" in opt else True
+        
+        if learn == False:
+            n = sum([2**i for i in range(opt["depth"]+1)])
+            learn = np.repeat([False],n)
+            learn[-2**opt["depth"]:] = True
+                 
         
         self.SkipBlocksDown = nn.ModuleList(
             [
@@ -318,6 +347,7 @@ class SDL_skip(nn.Module):
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
                 value = opt["value"] if "value" in opt else True,
+                learn = learn[i],
                 
             )
             for i in range(len(Spectral_M_down))]
@@ -345,6 +375,7 @@ class SDL_skip(nn.Module):
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
                 value = opt["value"] if "value" in opt else True,
+                learn = learn[inversindex[i]],
             )
             for i in range(len(Spectral_M_down))]
         )
