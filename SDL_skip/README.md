@@ -1,6 +1,7 @@
 # SDL_skip
 
-![Architecture!]([/Image/DownsampleBlock.drawio4(1).svg](https://github.com/MichZap/SDL_skip/blob/main/SDL_skip/Image/DownsampleBlock.drawio4(1).svg) "Architecture")
+![Alt text](./Image/DownsampleBlock.drawio4(1).svg)
+<img src="./Image/DownsampleBlock.drawio4(1).svg">
 
 Tested with Python 3.10.13 and Anaconda on Windows 10
 
