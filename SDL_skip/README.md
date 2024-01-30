@@ -1,6 +1,6 @@
 # SDL_skip
 
-![Alt text](./Image/DownsampleBlock.drawio4.png)
+
 <img src="./Image/DownsampleBlock.drawio4.png">
 
 Tested with Python 3.10.13 and Anaconda on Windows 10
