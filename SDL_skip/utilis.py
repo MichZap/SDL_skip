@@ -27,36 +27,40 @@ def gnn_model_summary(model):
           
 #calculate mean face
 def meanply(Data, typ = "Coma"):
-    i=0
-    if typ == "FWH":
-        n = int(Data.shape[1]/3)
-        for idx in range(len(Data)):
-            vertex = Data[idx]
-            verts_init = np.stack((vertex[:n], vertex[n:2*n], vertex[2*n:3*n]),axis=1)
-            verts_init = verts_init.astype('float32')
-
-            if i==0:
-                mean=verts_init
-                i=i+1
-            else:
-                mean=mean+verts_init
-    else:
-        for idx in Data.index:
-            raw_path = Data.Path[idx]
-            ply = PlyData.read(raw_path)
-            vertex=ply["vertex"]
-            verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
-            verts_init = verts_init.astype('float32')
-
-            if i==0:
-                mean=verts_init
-                i=i+1
-            else:
-                mean=mean+verts_init
     
-    sc = 1000 if typ == "Coma" else 1    
-    m = mean/len(Data)*sc
-    np.save("mean_"+typ+".npy",m)
+    if os.path.isfile("mean_"+typ+".npy"):
+        m = np.load("mean_"+typ+".npy")
+    else:
+        i=0
+        if typ == "FWH":
+            n = int(Data.shape[1]/3)
+            for idx in range(len(Data)):
+                vertex = Data[idx]
+                verts_init = np.stack((vertex[:n], vertex[n:2*n], vertex[2*n:3*n]),axis=1)
+                verts_init = verts_init.astype('float32')
+    
+                if i==0:
+                    mean=verts_init
+                    i=i+1
+                else:
+                    mean=mean+verts_init
+        else:
+            for idx in Data.index:
+                raw_path = Data.Path[idx]
+                ply = PlyData.read(raw_path)
+                vertex=ply["vertex"]
+                verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
+                verts_init = verts_init.astype('float32')
+    
+                if i==0:
+                    mean=verts_init
+                    i=i+1
+                else:
+                    mean=mean+verts_init
+        
+        sc = 1000 if typ == "Coma" else 1    
+        m = mean/len(Data)*sc
+        np.save("mean_"+typ+".npy",m)
     return(m)
 
 def procrustes_ply(Data,folder):

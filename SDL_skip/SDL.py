@@ -9,7 +9,7 @@ from model_utilis import generate_inverse_series, IterativeSkip, MultiHeadAtt, a
 class SkipBlockD(nn.Module):
     def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0,
                  use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset =True, use_soft = False,
-                 use_att = False, aw = False, Skip = 2, n_heads = 0, value = True, learn = True ):
+                 use_att = False, use_norm_att = True, aw = False, Skip = 2, n_heads = 0, value = True, learn = True, sqrt = True ):
         super(SkipBlockD, self).__init__()
         
         self.learn = learn
@@ -37,6 +37,7 @@ class SkipBlockD(nn.Module):
         self.use_eigenvals = use_eigenvals
         self.aw = aw
         self.Skip = Skip
+        self.sqrt = sqrt
            
         if learn:
             if use_att == False:
@@ -46,9 +47,9 @@ class SkipBlockD(nn.Module):
                 if n_heads == 0:
                     self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
                     self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-                    self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
+                    self.norm = (lambda x: torch.nn.functional.normalize(x, p=1, dim=1)) if use_norm_att else nn.Identity() 
                 else:
-                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
+                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm_att,phi,value,sqrt)
     
                 
             self.l3 = nn.Linear(d, conv_size_out ,bias) if use_conv else nn.Identity()
@@ -88,7 +89,8 @@ class SkipBlockD(nn.Module):
         
         if self.use_att:
             if self.n_heads == 0:
-                score = torch.matmul(self.key,self.query)/torch.sqrt(torch.tensor(self.key.size(-1)))
+                n = torch.sqrt(torch.tensor(self.key.size(-1))) if self.sqrt else 1
+                score = torch.matmul(self.key,self.query)/n
                 score = self.norm(score)
                 y = torch.matmul(self.dropout(score).T,x)
             else:
@@ -155,7 +157,7 @@ class SkipBlockD(nn.Module):
 class SkipBlockU(nn.Module):
     def __init__(self,hidden_dim, conv_size, phi, eig_vals, prior_coef, activation='ReLU',dropout = 0, use_activation = 0,
                  use_conv = True, use_eigenvals = False, use_norm = False, bias = True, reset = True, use_soft= False,
-                 use_att = False, aw = False, Skip = 2, n_heads = 0, value = True, learn = True ):
+                 use_att = False, use_norm_att = True, aw = False, Skip = 2, n_heads = 0, value = True, learn = True, sqrt = True ):
         super(SkipBlockU, self).__init__()
         
         self.learn = learn
@@ -181,6 +183,7 @@ class SkipBlockU(nn.Module):
         self.use_eigenvals = use_eigenvals
         self.aw = aw
         self.Skip = Skip
+        self.sqrt = sqrt
         
         if learn:      
             if use_att == False:
@@ -190,9 +193,9 @@ class SkipBlockU(nn.Module):
                 if n_heads == 0:
                     self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
                     self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-                    self.norm = lambda x: torch.nn.functional.normalize(x, p=1, dim=1)
+                    self.norm = (lambda x: torch.nn.functional.normalize(x, p=1, dim=1)) if use_norm_att else nn.Identity() 
                 else:
-                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm,phi,value)
+                    self.mh = MultiHeadAtt(hidden_dim,n_heads,dropout,use_norm_att,phi,value,sqrt)
             
     
                 
@@ -247,7 +250,8 @@ class SkipBlockU(nn.Module):
 
         if self.use_att:
             if self.n_heads == 0:
-                score = torch.matmul(self.key,self.query)/torch.sqrt(torch.tensor(self.key.size(-1)))
+                n = torch.sqrt(torch.tensor(self.key.size(-1))) if self.sqrt else 1
+                score = torch.matmul(self.key,self.query)/n
                 score = self.norm(score)
                 y = torch.matmul(self.dropout(score).T,y)
             else:
@@ -318,11 +322,13 @@ class SDL_skip(nn.Module):
         eig_vals = torch.tensor(eig_vals,device = opt["device"],requires_grad=False)
 
         learn = opt["learn"] if "learn" in opt else True
+        n = sum([2**i for i in range(opt["depth"]+1)])
         
         if learn == False:
-            n = sum([2**i for i in range(opt["depth"]+1)])
             learn = np.repeat([False],n)
             learn[-2**opt["depth"]:] = True
+        else:
+            learn = np.repeat([True],n)
                  
         
         self.SkipBlocksDown = nn.ModuleList(
@@ -348,6 +354,8 @@ class SDL_skip(nn.Module):
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
                 value = opt["value"] if "value" in opt else True,
                 learn = learn[i],
+                use_norm_att = opt["use_norm_att"] if "use_norm_att" in opt else True,
+                sqrt = opt["sqrt"] if "sqrt" in opt else True,
                 
             )
             for i in range(len(Spectral_M_down))]
@@ -376,6 +384,8 @@ class SDL_skip(nn.Module):
                 n_heads = opt["n_heads"] if "n_heads" in opt else 0,
                 value = opt["value"] if "value" in opt else True,
                 learn = learn[inversindex[i]],
+                use_norm_att = opt["use_norm_att"] if "use_norm_att" in opt else True,
+                sqrt = opt["sqrt"] if "sqrt" in opt else True,
             )
             for i in range(len(Spectral_M_down))]
         )

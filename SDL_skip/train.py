@@ -1,7 +1,8 @@
-from utilis import EUCLoss
+from utilis import EUCLoss, gnn_model_summary
 import torch
 import numpy as np
 from SDL import SDL_skip
+from SDL_simple import SDL_skip_simple
 from Dataloader import load_data
 from torch.utils.data import DataLoader
 import math
@@ -53,13 +54,19 @@ def train_bf(config):
     eig_vecs = np.load(outfile_vec)
     eig_vals = np.load(outfile_val)
 
-    f = max(config["nb_freq"])
+    freq = max(config["nb_freq"])
 
-    eig_vals = eig_vals[:f]
-    eig_vecs = eig_vecs[:,:f]
+    eig_vals = eig_vals[:freq]
+    eig_vecs = eig_vecs[:,:freq]
 
+    simple = config["simple"] if 'simple' in config else False
+    if simple:
+        model = SDL_skip_simple(config,eig_vecs,eig_vals)
+    else:
+        model = SDL_skip(config,eig_vecs,eig_vals)
     
-    model = SDL_skip(config,eig_vecs,eig_vals)
+    gnn_model_summary(model)
+    
     model.to(config["device"])
     optimizer = torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min',factor = config["shed_fac"],patience=config["shed_pat"],min_lr = config["learning_rate"]/100)
@@ -142,7 +149,7 @@ def train_bf(config):
             break
         
         
-        if epoch%config["print_epoch"]==0:
+        if epoch%config["print_epoch"]==0 or epoch == 1:
            print("epoch:",epoch,"MAE_loss_val:", epoch_loss, "EUC_loss_val:", epoch_loss2,"MAE_loss_train:", l1train, "EUC_loss_train:", l2train)
         
         if epoch_loss < best_loss1_t:
