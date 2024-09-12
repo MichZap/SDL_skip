@@ -5,12 +5,29 @@ import glob
 from plyfile import PlyData
 import numpy as np
 import pandas as pd
-from utilis import meanply
+from utilis import meanply, sdply
 from Transforms import RandomFlip, RandomRotate
 from torchvision.transforms import Compose
 from sklearn.model_selection import train_test_split
+from Sym_transform import symtrans, aysmtrans
 
-def load_data(p,root_dir,folder,axis, typ ="Coma", flip = True, rot = True):
+def trans(batch,p,axis, flip = True, rot = True):
+     
+    rot_t = [RandomRotate(axis=ax,p=p)   for ax in axis] if rot else None
+    flip_t = [RandomFlip(axis=ax,p=p)   for ax in axis] if flip else None
+
+    if rot and flip:
+        transform = Compose([Compose(rot_t),Compose(flip_t)])
+    if rot and not flip:
+        transform = Compose(rot_t)
+    if not rot and flip:
+        transform = Compose(flip_t)
+    
+    if not rot and not flip:
+        transform = None
+    return transform(batch)
+
+def load_data(p,root_dir,folder,mat_path,axis, typ ="Coma", sym = False, std = False, flip = True, rot = True):
      
     rot_t = [RandomRotate(axis=ax,p=p)   for ax in axis] if rot else None
     flip_t = [RandomFlip(axis=ax,p=p)   for ax in axis] if flip else None
@@ -35,6 +52,7 @@ def load_data(p,root_dir,folder,axis, typ ="Coma", flip = True, rot = True):
         Path = []
         Face = []
         
+        
         k=0
         for i in os.scandir(folder):
             if i.is_dir():
@@ -58,8 +76,36 @@ def load_data(p,root_dir,folder,axis, typ ="Coma", flip = True, rot = True):
         df_train = Coma_df[Coma_df.Test==False]
         df_val = Coma_df[Coma_df.Test==True]
         
+    elif typ == "BBF_exp":
+        Name = []
+        Test = []
+        Path = []
+        Face = []
+        Exp = []
         
-    
+        os.chdir(folder)
+        for file in glob.glob("*.ply"):
+            Name.append(file.partition(".")[0])
+        
+            
+        Path = [folder +"\\"+name+".ply" for name in Name]
+        Face = [name[:36] for name in Name]
+        Exp = [name[65:67] for name in Name]
+        
+        Face_un = np.unique(Face)
+        
+        np.random.seed(31415)
+        torch.manual_seed(31415)
+        
+        Face_train, Face_test = train_test_split(Face_un, test_size = 0.2)
+        
+        Test = [True if face in Face_test else False for face in Face]
+        
+        Babyface_df=pd.DataFrame({'Name' : Name,'Test':Test,'Face':Face,'Exp':Exp,'Path' : Path})
+        
+        df_train = Babyface_df[Babyface_df.Test==False]
+        df_val = Babyface_df[Babyface_df.Test==True]
+        
     else:                     
         #create df
         Name=[]
@@ -75,21 +121,50 @@ def load_data(p,root_dir,folder,axis, typ ="Coma", flip = True, rot = True):
         np.random.seed(31415)
         torch.manual_seed(31415)
 
-        df_train,df_val = train_test_split(Babyface_df,test_size = 0.2)
-                         
-    mean=meanply(df_train, typ = typ)  
+        if typ == "BBF":
+            df_train,df_val = train_test_split(Babyface_df,test_size = 0.2)
+        else:
+            df_train =  Babyface_df
+            df_val = Babyface_df
+    
+    if sym == "sym" or sym == "asym":
+        Name = []
+        Path = []
         
-    train_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_train, mean=mean,transform=transform,dummy_node = False, mode="train",typ = typ)
-    val_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_val, mean=mean,dummy_node = False, mode ="val", typ = typ)
+        for path in df_train.Path:
+            newpaths,newnames = symtrans(path,mat_path)
+            Path.extend(newpaths)
+            Name.extend(newnames)
+        if sym == "asym":
+            for path in df_train.Path:
+                for path1 in df_train.Path:
+                    if path != path1:
+                        newpaths,newnames = aysmtrans(path,path1,mat_path)
+                        Path.extend(newpaths)
+                        Name.extend(newnames)
+        
+        df_train_sym = pd.DataFrame({'Name' : Name,'Path' : Path})
+        df_train = pd.concat([df_train,df_train_sym] , ignore_index=True)
+    
+    
+    if typ == "BBF_add":
+        mean = np.load(r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes\mean_BBF.npy")
+    else:
+        mean=meanply(df_train, typ = typ)
+        sd = sdply(df_train, typ = typ) if std else None
+        
+    train_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_train, mean = mean, sd = sd, transform=transform,dummy_node = False, mode="train",typ = typ)
+    val_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_val, mean = mean, sd = sd, dummy_node = False, mode ="val", typ = typ)
 
     return train_set, val_set
 
 #based on Neural3DMM Datalaoder
 class autoencoder_dataset(Dataset):
 
-    def __init__(self, root_dir, points_dataset, mean=None, transform=None, dummy_node = True, mode="train", typ = "Coma"):
+    def __init__(self, root_dir, points_dataset, mean=None, sd = None, transform=None, dummy_node = True, mode="train", typ = "Coma"):
         
         self.mean = mean
+        self.sd = sd
         self.transform = transform
         self.root_dir = root_dir
         self.points_dataset = points_dataset
@@ -110,6 +185,9 @@ class autoencoder_dataset(Dataset):
             path=self.root_dir+"\\processed\\"+self.points_dataset.Face.iloc[idx]+"_"+self.points_dataset.Name.iloc[idx]+".pt"
         else:
             path=self.root_dir+"\\processed\\"+self.points_dataset.Name.iloc[idx]+".pt"
+            
+        if self.sd is not None:
+            path = path[:-3] + "sd.pt"
         
         if os.path.isfile(path):
             verts = torch.load(path)
@@ -131,6 +209,9 @@ class autoencoder_dataset(Dataset):
             
             if self.mean is not None:
                 verts_init = verts_init -self.mean
+                
+            if self.sd is not None:
+                verts_init = verts_init/self.sd
 
             if self.dummy_node:
                 #adds an additional vetex [0,0,0] add the end

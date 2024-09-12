@@ -63,6 +63,51 @@ def meanply(Data, typ = "Coma"):
         np.save("mean_"+typ+".npy",m)
     return(m)
 
+def sdply(Data, typ = "Coma"):
+    
+    if os.path.isfile("sd_"+typ+".npy"):
+        sd = np.load("sd_"+typ+".npy")
+        
+    else:
+        i=0
+        m = meanply(Data, typ)
+        
+        if typ == "FWH":
+            n = int(Data.shape[1]/3)
+            for idx in range(len(Data)):
+                vertex = Data[idx]
+                verts_init = np.stack((vertex[:n], vertex[n:2*n], vertex[2*n:3*n]),axis=1)
+                verts_init = verts_init.astype('float32')-m
+    
+                if i==0:
+                    sd = verts_init**2
+                    i=i+1
+                else:
+                    sd = sd + verts_init**2
+        else:
+            for idx in Data.index:
+                
+                sc = 1000 if typ == "Coma" else 1  
+                
+                raw_path = Data.Path[idx]
+                ply = PlyData.read(raw_path)
+                vertex=ply["vertex"]
+                verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
+                verts_init = verts_init.astype('float32')*sc - m
+    
+                if i==0:
+                    sd = verts_init**2
+                    i=i+1
+                else:
+                    sd = sd + verts_init**2
+        
+  
+        sd = np.sqrt(sd/(len(Data)-1))
+        np.save("sd_"+typ+".npy",sd)
+    return(sd)
+    
+    
+
 def procrustes_ply(Data,folder):
     
     i=0

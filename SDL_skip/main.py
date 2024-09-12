@@ -14,17 +14,17 @@ torch.backends.cudnn.deterministic = True
 #Settings
 config = {
   "depth": 2,                   # model depth 0 pools directly to the latent size 
-  "nb_freq": [4096,1024,256],   # number of eigenvectors considered, here i,m and j from illustration
+  "nb_freq": [4096, 1024, 256],   # number of eigenvectors considered, here i,m and j from illustration
   "device": "cuda",
   "learning_rate": 1e-3/2,
   "train_batch_size": 16,
   "test_batch_size": 16,
-  "hidden_dim": [64]*7,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
-  "conv_size": [1024]*7,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
-  "prior_coef": 0.9,            # weight w initialization for the skip connection, the learnable component gets scaled by 1-w
-  "use_activation":0,           # 0 no activation functions, 1 between every two linear layers, 2 after every linear layer, -1 like 1 but only in the convolution operation
-  "dropout":0,              
-  "activation": "ELU",          # ReLU, Tanh, Sigmoid, LeakyReLU, ELU, SiLU, SwiGLU 
+  "hidden_dim": [16]*8,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+  "conv_size": [1024]*8,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+  "prior_coef": 0.4,            # weight w initialization for the skip connection, the learnable component gets scaled by 1-w
+  "use_activation":[0]*8,           # 0 no activation functions, 1 between every two linear layers, 2 after every linear layer, -1 like 1 but only in the convolution operation
+  "dropout":0.0,              
+  "activation": "ReLU",          # ReLU, Tanh, Sigmoid, LeakyReLU, ELU, SiLU, SwiGLU 
   "use_conv": True,             # use linear(4,c) and linear(c,3) from illustration
   "use_eigenvals":False,         # use eigenvalue encoding
   "use_norm":False,             # use LayerNorm before every block of linear layers
@@ -43,9 +43,16 @@ config = {
   "print_epoch":25,
   "shed_pat":25,                # learning rate sheduler patience, see N in paper
   "es_pat":100,                 # early stopping patience, see M in paper
-  "Skip":2,                     # 0 no skip connections, 1 skip connection to end of each block, 2 skip connection to middle and end, 3 skip connection only to middle
+  "Skip":-1,                     # 0 no skip connections, 1 skip connection to end of each block, 2 skip connection to middle and end, 3 skip connection only to middle
   "learn":True,                # False disables the learnable component of all SkipBlocks apart of the deepest part of the skipping pyramid, reduces number of parameters approx by a factor fo 3
   "simple":True,                # uses simple model
+  "direct":False,                # if True the second skip conncetion start from the input
+  "add_data":False,
+  "sym":"asym",
+  "min_delta":0.001,
+  "sd":False,
+  "gate":False,
+  "save_epochs":[0,0,0,0,0,0,0,0,0,0,0,0,0],
 }
 
 
@@ -53,16 +60,20 @@ config = {
 
 
 ## folder where .pt-files will be stored 
-config["root_dir"] = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes\SDL'
+config["root_dir"] = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\old+new\pt"
 ## folder containing input ply-files
-config["folder"] = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes'
+config["folder"] = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\old+new"
+##if add_data is True
+config["folder_add"] = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Output\Augmentation\Samples\linear sqrt(n)'
+#for sym transform
+config["mat_path"] = r"C:\Users\Michael\Downloads\T8_SymmetrizedTemplate.mat"
 ## folder containing eigenvalues and eigenvectors
 config["path_decomp"] = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP'
 
 
 i=0
-result_df = pd.DataFrame(columns=["nb_freq","epoch","best_epoch","MAE_VAL","EUC_VAL","MAE_TRAIN","EUC_TRAIN"]) 
-for f in [2,3,5,6,10,11,21,42,85,170,341,682,1365]:
+result_df = pd.DataFrame(columns=["nb_freq","epoch","best_epoch","MAE_VAL","EUC_VAL","MAE_TRAIN","EUC_TRAIN","MIN_EUC_TRAIN"]) 
+for f in [3,5,11,21,42,85,170,341,682,1365]:
     np.random.seed(31415)
     torch.manual_seed(31415)
     random.seed(31415)
@@ -71,9 +82,12 @@ for f in [2,3,5,6,10,11,21,42,85,170,341,682,1365]:
         config["nb_freq"] = [f]
     else:
         config["nb_freq"].append(f)
+    config["save_epoch"] = config["save_epochs"][i]
     results = train_bf(config)
     result_df.loc[i]=results
     i = i+1
-    print(result_df)
+    with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.precision', 3):
+        print(result_df)
     config["nb_freq"] = config["nb_freq"][:-1]
 
+print(config)

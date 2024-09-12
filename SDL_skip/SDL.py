@@ -393,12 +393,18 @@ class SDL_skip(nn.Module):
         del Spectral_M_down
         torch.cuda.empty_cache()
 
+    def encoder(self,x):
+        z = IterativeSkip(x,self.SkipBlocksDown)
+        return z
+    
+    def decoder(self,z):
+        x = IterativeSkip(z,self.SkipBlocksUp)
+        return x
 
-        
         
     def forward(self, x):
         
-        x = IterativeSkip(x,self.SkipBlocksDown)
-        x = IterativeSkip(x,self.SkipBlocksUp)
+        z = self.encoder(x)
+        x = self.decoder(z)
 
         return x
