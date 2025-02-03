@@ -1,6 +1,6 @@
 # SDL_skip
 
-Official repository for the FG2024 paper Deep learnable spectral decomposition on baby faces.
+Official repository for the  paper Deep learnable spectral decomposition of baby faces.
 We also include slightly modified versions of SAE and Deep3DMM/Neural3DMM, both used in the paper.
 
 ## Abstract
