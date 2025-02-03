@@ -5,20 +5,25 @@ We also include slightly modified versions of SAE and Deep3DMM/Neural3DMM, both 
 
 ## Abstract
 
-*Autoencoders on meshes mostly use precal-
-culated pooling and upsampling in combination with spatial
-or spectral convolutions. In this paper, we propose a simple,
-flexible yet effective algorithm for meshes with common topol-
-ogy, combining Graph-Laplacian based spectral decomposition
-with a transformer-like learnable component. Applying the
-decomposition matrices as skip-connection, provides our archi-
-tecture with a prior, that contains local and global information
-with regards to the underlying mesh structure. The learnable
-component does not make any domain specific assumptions and
-is able to overwrite the prior, if needed. This allows our model
-to perform well on both small and large datasets. We further
-manipulate the decomposition matrices to generate deeper
-versions of this architecture.*
+*In this paper, we introduce a novel, deep 3D morphable model for meshes with common
+triangulation. Specifically, we apply it to reconstruct baby faces. The proposed
+algorithm is simple, adaptable, and specifically targeted to perform well on small
+datasets. We combine Graph-Laplacian based spectral decomposition with a learnable,
+transformer-like component. The decomposition matrices are applied as skipconnections,
+providing our architecture with a prior that encodes both local and global
+information of the underlying mesh structure. The learnable component does not make
+any domain-specific assumptions and can override the prior, if necessary. This flexibility
+also allows our model to perform well on larger datasets. We further modify the
+decomposition matrices to create deeper versions of this architecture and introduce a
+data augmentation strategy: flipping and rotations are applied to the deviations from
+the mean, rather than directly to the samples. In our experiments, we compare the reconstruction
+error of the proposed architecture against the state of the art, examine the
+effect of data augmentation across a small baby face dataset and a larger adult dataset
+and inspect our model’s capabilities to generate new samples from the encoded distribution.
+We show that our method outperforms current baby face models, as well
+as state of the art 3D morphable models, especially on the raw data. Additionally,
+we demonstrate that the proposed data augmentation substantially improves existing
+models.*
 
 
 ## Requirements
