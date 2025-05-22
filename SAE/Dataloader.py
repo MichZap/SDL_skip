@@ -6,26 +6,17 @@ from plyfile import PlyData
 import numpy as np
 import pandas as pd
 from utilis import meanply
-from Transforms import RandomFlip, RandomRotate
+from Transforms import RandomFlip, RandomRotate, AddGaussianNoise, SpectralInterpolation
 from torchvision.transforms import Compose
 from sklearn.model_selection import train_test_split
 
-def load_data(p,root_dir,folder,axis, phi, typ ="Coma", flip = True, rot = True):
-     
-    rot_t = [RandomRotate(axis=ax,p=p)   for ax in axis] if rot else None
-    flip_t = [RandomFlip(axis=ax,p=p)   for ax in axis] if flip else None
+def load_data(p,root_dir,folder,axis, phi, typ ="Coma", flip = True, rot = True, sigma= False, aug_mean = False, comp = 0):
 
-    if rot and flip:
-        transform = Compose([Compose(rot_t),Compose(flip_t)])
-    if rot and not flip:
-        transform = Compose(rot_t)
-    if not rot and flip:
-        transform = Compose(flip_t)
-    
-    if not rot and not flip:
-        transform = None
+    if sigma > 0:
+        sigma_flag = True
+    else:
+        sigma_flag = False
 
-    
     if typ == "FWH":
         df_train = np.load(folder+"//"+"train_data.npy", mmap_mode='r')
         df_val = np.load(folder+"//"+"test_data.npy", mmap_mode='r')
@@ -76,7 +67,31 @@ def load_data(p,root_dir,folder,axis, phi, typ ="Coma", flip = True, rot = True)
 
         df_train,df_val = train_test_split(Babyface_df,test_size = 0.2)
                          
-    mean=meanply(df_train, typ = typ)  
+    mean=meanply(df_train, typ = typ)
+    
+    rot_t = [RandomRotate(axis=ax,p=p)   for ax in axis] if rot == True else []
+    flip_t = [RandomFlip(axis=ax,p=p)   for ax in axis] if flip == True else []
+    gn_t =  [AddGaussianNoise(sigma,p)] if sigma_flag == True else []
+    spec_int = [SpectralInterpolation(df_train, phi, comp, root_dir,p=p)] if comp > 0 else []
+
+
+    
+    if not rot and not flip and not sigma_flag and comp == 0:
+        transform = None
+        
+    else:
+        transform = rot_t+ flip_t + gn_t + spec_int
+        preprocess_transforms = []
+        postprocess_transforms = []
+        if aug_mean == True:
+
+            mean_sp = np.matmul(phi.T,mean)
+            preprocess_transforms.append(lambda x: x + mean_sp)
+            postprocess_transforms.append(lambda x: x - mean_sp)
+            
+        transform = preprocess_transforms + transform + postprocess_transforms
+        transform = Compose(transform)
+        
         
     train_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_train, phi = phi, mean=mean,transform=transform,dummy_node = False, mode="train",typ = typ)
     val_set = autoencoder_dataset(root_dir = root_dir, points_dataset = df_val, phi = phi, mean=mean,dummy_node = False, mode ="val", typ = typ)

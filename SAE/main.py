@@ -23,7 +23,12 @@ config = {
   "downsample":[512, 376, 256, 128],
   "dropout":0,
   "activation_func": "ELU",
-  "p":0,
+  "p":0.7,
+  "flip":False,
+  "rot":False,
+  "sigma":0,
+  "comp":100,
+  "aug_mean":False,
   "epochs":10000,
   "typ": "BBF",
   "shed_fac":0.5,
@@ -46,7 +51,7 @@ config["path_decomp"] = path_decomp
 
 i=0
 result_df = pd.DataFrame(columns=["latent_size","epoch","best_epoch","MAE_VAL","EUC_VAL","MAE_TRAIN","EUC_TRAIN"]) 
-for f in [8,16,32,64,128,256,512,1024,2048,4096]:
+for f in [9,15,33,63,126,255,510,1023,2046,4095]:
     
     np.random.seed(31415)
     torch.manual_seed(31415)

@@ -28,30 +28,32 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 #Settings
+#Settings
 config = {
-  "depth": 2,                   # model depth 0 pools directly to the latent size 
-  "nb_freq": [4096,1024,256],   # number of eigenvectors considered, here i,m and j from illustration
+  "depth": 0,                   # model depth 0 pools directly to the latent size 
+  "nb_freq": [],   # number of eigenvectors considered, here i,m and j from illustration
   "device": "cuda",
   "learning_rate": 1e-3/2,
-  "train_batch_size": 16,
-  "test_batch_size": 16,
-  "hidden_dim": [64]*7,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
-  "conv_size": [1024]*7,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
-  "prior_coef": 0.4,            # weight w initialization for the skip connection, the learnable component gets scaled by 1-w
+  "train_batch_size": 1,
+  "test_batch_size": 1,
+  "hidden_dim": [64]*8,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+  "conv_size": [1024]*8,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+  "prior_coef": 0.8,            # weight w initialization for the skip connection, the learnable component gets scaled by 1-w
   "use_activation":0,           # 0 no activation functions, 1 between every two linear layers, 2 after every linear layer, -1 like 1 but only in the convolution operation
-  "dropout":0,              
-  "activation": "ELU",          # ReLU, Tanh, Sigmoid, LeakyReLU, ELU, SiLU, SwiGLU 
+  "dropout":0.0,              
+  "activation": "SiLU",          # ReLU, Tanh, Sigmoid, LeakyReLU, ELU, SiLU, SwiGLU 
   "use_conv": True,             # use linear(4,c) and linear(c,3) from illustration
   "use_eigenvals":True,         # use eigenvalue encoding
   "use_norm":False,             # use LayerNorm before every block of linear layers
   "use_att":False,              # use Attention-Matrix for pooling
-  "use_norm_att":False,          # in case of use_att True determine if the attentionscore gets normalized
-  "sqrt":False,                  # in case of use_att True determine if the attentionscore gets scaled by sqrt of dim
-  "n_heads":0,                  # in case of use_att True determine the number of heads, n_heads = 0 and n_heads = 1 slightly different implementation
+  "use_norm_att":"Soft",          # in case of use_att True determine if the attentionscore gets normalized
+  "sqrt":True,                  # in case of use_att True determine if the attentionscore gets scaled by sqrt of dim
+  "n_heads":8,                  # in case of use_att True determine the number of heads, n_heads = 0 and n_heads = 1 slightly different implementation
   "value":False,                 # in case of multihead attention, use additional 3x3 value matrix
   "bias":False,                 # use bias for linear layers
   "p":0,                        # augmentation probability for flipping and rotation per axis
-  "reset":True,                 # use axvier uniform weight initialization instead of pytorch default
+  "k":2,                        # max amount of consecutive augmentations
+  "reset":False,                 # use axvier uniform weight initialization instead of pytorch default
   "aw":True,                    # use additional weight to scale every SkipBlock
   "epochs":10000,
   "typ": "BBF",                 # data to be used "BBF", "Coma" and "FWH"
@@ -63,9 +65,23 @@ config = {
   "learn":True,                # False disables the learnable component of all SkipBlocks apart of the deepest part of the skipping pyramid, reduces number of parameters approx by a factor fo 3
   "simple":False,                # uses simple model
   "direct":True,                # if True the second skip conncetion start from the input
-  "add_data":False,
-  "min_delta":0,
-  "save_epochs":[63,124,216,255,135,146,71,46,48,48,69,82,96],
+  "add_data":False,             # if we use addition data from folder_add, not considered in train test split
+  "sym":False,                 # False default, "sym" adds mirrored and symmetric mesh, "aysm" additional transfers asymtries from one face to another requires indices for mirroring
+  "p_asym":0.1,                 # probability for asymmetrty transfer to control ratio between real and asymmetric data
+  "min_delta":0,                # parameter for early stopping tolerance
+  "sd":False,                   # sd normalization in Dataloader
+  "gate":False,                 # for simple version gate the weight parameter if true
+  "flatten":False,              # flatten of the hidden dim during pooling only work if use_att false and simpel True
+  "SSH": False,                  # normalizetion in data loader such that all meshes have norm = 1
+  "proj":True,                  # if False uses weights instead of proj matrix in mh attention
+  "Pai": True,                  # Pai conv in the end
+  "paiconv_size":[9,9],             # Pai conv size
+  "in_ch":[3,3],                    # Pai conv in channels
+  "out_ch":[3,3],                   # Pai conv out channels
+  "pai_act":[1,1],                # Pai conv activation  0 or 1
+  "pai_skip":[True,True],
+  "pai_small":[False,False],
+  "save_epochs":[1177,0,0,0,0,0,0,0,0,0,0,0],
 }
 
 ## folder where .pt-files will be stored 
@@ -187,7 +203,7 @@ def evaluate(folder,Babyface_df_test):
     cbar.ax.tick_params(labelsize=35)  # Set tick label size
     plt.show()
     
-    for fr in [2,3,5,6,10,11,21,42,85,170,341,682,1365]:
+    for fr in [85]:
         if config["depth"] == 0:
             config["nb_freq"] = [fr]
         else:
@@ -208,12 +224,15 @@ def evaluate(folder,Babyface_df_test):
         model = SDL_skip(config,eig_vecs,eig_vals)
         
         
-        PATH = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Weights\SDL_skip\deep2 Paper"+"\\"+str(fr)+"_SDL_skip.pt"
+        PATH = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Weights\SDL_skip\deep0 Paper"+"\\"+str(fr)+"_SDL_skip.pt"
         # Load the state dict from file
         state_dict = torch.load(PATH)
     
         # Load the state dict into the model
         model.load_state_dict(state_dict["model_state_dict"])
+        
+        wd = model.SkipBlocksDown[0].weights[1].cpu().detach().numpy()
+        wu = model.SkipBlocksUp[0].weights[1].cpu().detach().numpy()
         
         model.eval()
         model.cuda()
@@ -226,7 +245,14 @@ def evaluate(folder,Babyface_df_test):
         with torch.no_grad():
             j = 0
             for data in testloader:  # Iterate in batches over the training dataset.
+            
+                 ls = model.encoder(data['points'].to('cuda')).cpu().detach().numpy()
+                 lsp = np.matmul(eig_vecs.T,data['points'].numpy())
+                 lss = (ls - wd*lsp)/(1-wd)
                  out = model(data['points'].to('cuda'))  # Perform a single forward pass.
+                 outsp = np.matmul(eig_vecs,ls)
+                 outs = (out.cpu().detach().numpy() - wu*outsp)/(1-wu)
+                 
                  loss = criterion(out, data['points'].cuda())  # Compute the loss.
                  loss2 = criterion2(out, data['points'].cuda())
                  #print(Babyface_df_test.Name[j]," : ",loss2.item())

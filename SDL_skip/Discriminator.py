@@ -174,13 +174,21 @@ class Generator(nn.Module):
         
         del Spectral_M_down
         torch.cuda.empty_cache()
+        
+        self.mu = nn.Parameter(torch.Tensor(opt["nb_freq"][-1],1))
+        self.cov = nn.Parameter(torch.Tensor(opt["nb_freq"][-1], opt["nb_freq"][-1]))
+        self.reset_parameters()
+    
+    def reset_parameters(self):
+        torch.nn.init.xavier_uniform_(self.mu, gain=1.0)
+        torch.nn.init.xavier_uniform_(self.cov, gain=1.0)
 
 
 
         
         
     def forward(self, x):
-        
+        x = self.mu + torch.matmul(self.cov,x)
         x = IterativeSkip(x,self.SkipBlocksUp)
 
         return x

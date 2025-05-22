@@ -21,8 +21,11 @@ def symtrans(ply_path,mat_path):
     #new path to save modified files
     folder, filename_with_extension = os.path.split(ply_path)
     filename_without_extension, _ = os.path.splitext(filename_with_extension)
-    new_path = folder + "\\sym\\" + filename_without_extension + "_sym_trans.ply"
-    new_path2 = folder + "\\sym\\" + filename_without_extension + "_sym.ply"
+
+    #new_path = folder + "\\sym\\" + filename_without_extension + "_sym_trans.ply"
+    #new_path2 = folder + "\\sym\\" + filename_without_extension + "_sym.ply"
+    new_path =  os.path.join(folder, "sym", filename_without_extension + "_sym_trans.ply")
+    new_path2 = os.path.join(folder, "sym", filename_without_extension + "_sym.ply")
     
     if os.path.isfile(new_path) or "sym" in filename_without_extension:
         return [new_path,new_path2], [filename_without_extension + "_sym_trans",filename_without_extension + "_sym"]
@@ -80,10 +83,17 @@ def aysmtrans(ply_path_temp,ply_path,mat_path):
     name3 = name_inv  + "_asym1"
     name4 = name_inv  + "_asym2"
     
-    new_path1 = folder + "\\sym\\" + name1 + ".ply"
-    new_path2 = folder + "\\sym\\" + name2 + ".ply"
-    new_path3 = folder + "\\sym\\" + name3 + ".ply"
-    new_path4 = folder + "\\sym\\" + name4 + ".ply"
+    #new_path1 = folder + "\\sym\\" + name1 + ".ply"
+    #new_path2 = folder + "\\sym\\" + name2 + ".ply"
+    #new_path3 = folder + "\\sym\\" + name3 + ".ply"
+    #new_path4 = folder + "\\sym\\" + name4 + ".ply"
+    
+    new_path1 = os.path.join(folder, "sym", name1 + ".ply")
+    new_path2 = os.path.join(folder, "sym", name2 + ".ply")
+    new_path3 = os.path.join(folder, "sym", name3 + ".ply")
+    new_path4 = os.path.join(folder, "sym", name4 + ".ply")
+    
+    
     
     if os.path.isfile(new_path1):
         return [new_path1,new_path2], [name1,name2]

@@ -4,6 +4,7 @@ import numpy as np
 import torch.nn.functional as F
 import os
 from scipy.linalg import orthogonal_procrustes
+from itertools import combinations
 
 #from celi/antonias code
 def gnn_model_summary(model):
@@ -24,12 +25,20 @@ def gnn_model_summary(model):
     num_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("Trainable params:", num_trainable_params)
     print("Non-trainable params:", total_params - num_trainable_params)
+    
+
           
 #calculate mean face
-def meanply(Data, typ = "Coma"):
+def meanply(Data, typ = "Coma", sym = False, SSH = False):
     
-    if os.path.isfile("mean_"+typ+".npy"):
-        m = np.load("mean_"+typ+".npy")
+    if sym != False:
+        sym = True
+    
+    file = f"mean_sym_{int(sym)}_SSH_{int(SSH)}_{typ}.npy"
+        
+    
+    if os.path.isfile(file):
+        m = np.load(file)
     else:
         i=0
         if typ == "FWH":
@@ -38,7 +47,9 @@ def meanply(Data, typ = "Coma"):
                 vertex = Data[idx]
                 verts_init = np.stack((vertex[:n], vertex[n:2*n], vertex[2*n:3*n]),axis=1)
                 verts_init = verts_init.astype('float32')
-    
+                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum()) if SSH == True else 1
+                verts_init = verts_init/SSH
+                
                 if i==0:
                     mean=verts_init
                     i=i+1
@@ -51,6 +62,9 @@ def meanply(Data, typ = "Coma"):
                 vertex=ply["vertex"]
                 verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
                 verts_init = verts_init.astype('float32')
+                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum())/verts_init.shape[0] if SSH == True else 1
+                verts_init = verts_init/SSH
+                
     
                 if i==0:
                     mean=verts_init
@@ -60,13 +74,18 @@ def meanply(Data, typ = "Coma"):
         
         sc = 1000 if typ == "Coma" else 1    
         m = mean/len(Data)*sc
-        np.save("mean_"+typ+".npy",m)
+        np.save(file,m)
     return(m)
 
-def sdply(Data, typ = "Coma"):
+def sdply(Data, typ = "Coma", sym = False):
     
-    if os.path.isfile("sd_"+typ+".npy"):
-        sd = np.load("sd_"+typ+".npy")
+    if sym == "asym":
+        sym = "sym"
+    
+    file = "sd_sym"+typ+".npy" if sym == "sym" else "sd_"+typ+".npy"
+    
+    if os.path.isfile(file):
+        sd = np.load(file)
         
     else:
         i=0
@@ -103,7 +122,7 @@ def sdply(Data, typ = "Coma"):
         
   
         sd = np.sqrt(sd/(len(Data)-1))
-        np.save("sd_"+typ+".npy",sd)
+        np.save(file,sd)
     return(sd)
     
     
@@ -118,7 +137,9 @@ def procrustes_ply(Data,folder):
         Name_new = Name_org + "_procr"
         
         
-        new_path = folder + "\\" + Name_new +".ply"
+        #new_path = folder + "\\" + Name_new +".ply"
+        new_path = os.path.join(folder, Name_new + ".ply")
+        print(new_path)
         
         if os.path.isfile(new_path) == False:
             
@@ -159,26 +180,59 @@ class EUCLoss(torch.nn.Module):
     
 class Mesh(object): 
     def __init__(self,
-                 v=None,
-                 f=None,
-                 filename=None,
+                 v = None,
+                 f = None,
+                 Adj = None,
+                 filename = None,
                  ):
         
-        if filename==None:
-            self.v=v
-            self.f=f
-        else:  
-            self.v,self.f=self.read(filename)
+        if filename == None:
+
+            self.v = v
+            self.f = f
+            self.Adj = self.get_adjacency(f,v)
+        else:
+
+            self.v,self.f = self.read(filename)
+            self.Adj = self.get_adjacency(self.f,self.v)
         
         
     def read(self,filename):
         
-        ply=PlyData.read(filename)
+        ply = PlyData.read(filename)
         
-        vertex=ply["vertex"]
-        face=ply["face"]['vertex_indices']
+        vertex = ply["vertex"]
+        face = ply["face"]['vertex_indices']
         
         v=np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
         f=np.stack(face,axis=0)
         
         return v,f
+    
+    def get_adjacency(self,f,v):
+        
+        dim = v.shape[0]
+        
+        Adj = np.eye(dim)
+        
+        for face in f:
+            # Get all 2-dimensional combinations
+            combinations_2d = list(combinations(face, 2))
+            for comb in combinations_2d:
+                Adj[comb] = 1
+                Adj[comb[::-1]] = 1
+                
+        return Adj
+            
+def identify_subject(name):
+    if name.startswith('uu5t1_LSCM'):
+        return name[:17]
+    elif name.startswith('CNMC'):
+        return name[:9]
+    elif name[0].isdigit():
+        return name[:3]
+    else:
+        return None  # Or some default value if the conditions aren't met
+
+
+    

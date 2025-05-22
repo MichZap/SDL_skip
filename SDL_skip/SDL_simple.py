@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from model_utilis import  activation_func, MultiHeadAtt
+from model_utilis import  activation_func, MultiHeadAtt, PaiConv, Partial_Derivative
 
 
 
@@ -19,7 +19,7 @@ class Skip(nn.Module):
     def forward(self, x, z, weights):        
         
         phi = self.phi if self.up else self.phi.T
-        
+        #check dim if dim == 1 parametric weights else learned gated weights with additional batch dim
         if weights.dim()==1:
             weights = weights.view(-1, 1)
         else:
@@ -34,75 +34,8 @@ class Skip(nn.Module):
 
         return y
 
-#class to pool and unpool    
-class Pool(nn.Module):  
-    def __init__(
-            self,
-            hidden_dim,
-            phi,
-            prior_coef,
-            dropout = 0,
-            use_norm = False,
-            reset = True,
-            use_att = False,
-            Skip = True,
-            sqrt = True,
-            up = False,
-            ):
-        super(Pool, self).__init__()
-        
-        in_channels = phi.size(1)
-        out_channels = phi.size(0)
-        
-        dim = in_channels if up else out_channels
-            
-        self.use_att = use_att
-        self.phi = phi
-        self.Skip = Skip
-        self.sqrt = sqrt
-        self.up = up
-        
-        
-        self.key =  nn.Parameter(torch.Tensor(in_channels, hidden_dim))
-        self.query = nn.Parameter(torch.Tensor(hidden_dim, out_channels))
-        self.norm = (lambda x: torch.nn.functional.normalize(x, p=1, dim=1)) if use_att else nn.Identity()
-        self.norm1 = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
-        self.dropout = nn.Dropout(p=dropout)
-        self.weights = nn.Parameter(torch.Tensor(dim))
-        
-        if reset:
-            self.reset_parameters()
-        nn.init.constant_(self.weights, prior_coef)
-
-        
-    def forward(self, x):
-        #sqrt normalization for cross attention like in "attention is all you need" but for crossattention
-        n = torch.sqrt(torch.tensor(self.key.size(-1))) if self.sqrt else 1
-        
-        #layer normailzation
-        if isinstance(self.norm1, nn.LayerNorm):
-            x = self.norm1(x.permute(0, 2, 1)).permute(0, 2, 1)
-        
-        #actual pooling (crossattention if use_att = True)
-        score = torch.matmul(self.key,self.query)/n
-        score = self.dropout(self.norm(score)).T
-        
-        #Skip connection which can be disabled by Sk
-        if self.Skip:
-            if self.up:
-                score = self.weights*self.phi + (1-self.weights)*score
-            else:
-                score = self.weights*self.phi.T + (1-self.weights)*score.T
-                score = score.T
-
-        y = torch.matmul(score,x)
-
-        return y
     
-    def reset_parameters(self):
-        
-        torch.nn.init.xavier_uniform_(self.key, gain=1.0)
-        torch.nn.init.xavier_uniform_(self.query, gain=1.0)
+
 
 #class for "conv" operator            
 class Conv(nn.Module):      
@@ -114,7 +47,7 @@ class Conv(nn.Module):
             use_activation,
             prior_coef,
             activation='ReLU',
-            dropout = 0,
+            dropout = 0,        
             use_norm = False,
             bias = True,
             Skip = True,
@@ -123,7 +56,7 @@ class Conv(nn.Module):
 
         d = 4 if use_eigenvals else 3
         
-        if activation == "SwiGLU":
+        if activation == "SwiGLU" and use_activation == 1:
            conv_size_in = int(conv_size/3)
            conv_size_out = conv_size_in*2
         else:
@@ -179,6 +112,7 @@ class SkipBlock_simple(nn.Module):
             use_activation = 0,
             use_conv = True,
             use_eigenvals = False,
+            use_norm_att = False,
             use_norm = False,
             bias = True,
             reset = True,
@@ -187,24 +121,32 @@ class SkipBlock_simple(nn.Module):
             sqrt = True, 
             up = False,
             use_weights = False,
-            gate = False,
+            flatten = False,
+            n_heads = 0,
+            value = False,
+            proj = True,
             ):
         super(SkipBlock_simple, self).__init__()
         
         ev_size = phi.size(1) if up else phi.size(0)
         
-        self.pool = Pool(
+        self.mh = MultiHeadAtt(
                             hidden_dim,
-                            phi,
-                            prior_coef,
+                            n_heads,
                             dropout,
-                            use_norm,
-                            reset,
-                            use_att,
-                            True if Skip >=2 else False,
+                            use_norm_att,
+                            phi,
+                            value,
                             sqrt,
+                            use_att,
+                            flatten,
+                            True if 2<= Skip <=3 else False,
+                            bias,
+                            not proj,
                             up,
-                        )
+                            reset,
+                            )
+        
         
         self.conv = Conv(
                             eig_vals[:ev_size],
@@ -238,15 +180,15 @@ class SkipBlock_simple(nn.Module):
                 
             z = self.conv(x)
             z = self.activation(z)
-            z = self.pool(z)
+            z = self.mh(z)
         else:
-            z = self.pool(x)
+            z = self.mh(x)
             z = self.activation(z)
             z = self.conv(z)
             if self.use_weights: 
                 z = (1-weights.view(-1, weights.size(-1), 1))*z
         
-        if self.Skip == -1:
+        if self.Skip >=3:
             if self.phi.size(0) == self.phi.size(1):
                 #spectral skip connection only if down or upsampling
                 y = x
@@ -259,7 +201,7 @@ class SkipBlock_simple(nn.Module):
 
 
 class SDL_skip_simple(nn.Module):
-    def __init__(self, opt,eig_vecs,eig_vals):
+    def __init__(self, opt,eig_vecs,eig_vals,Adj):
         super().__init__()
         
         k = len(opt["nb_freq"])
@@ -274,6 +216,22 @@ class SDL_skip_simple(nn.Module):
         eig_vals = torch.tensor(eig_vals,device = opt["device"],requires_grad=False)      
         M = len(Spectral_M_down)
         
+        
+        self.Pai = nn.ModuleList(
+            [
+            PaiConv(
+                torch.tensor(Adj),
+                opt["in_ch"][i],
+                opt["out_ch"][i],
+                opt["activation"] if opt["pai_act"][i] == 1 else 'identity',
+                opt["pai_skip"][i],
+                opt["pai_small"][i],
+                opt["paiconv_size"][i]
+            ) if opt["Pai"] else nn.Identity()
+            for i in range(len(opt["out_ch"]))
+            ])
+        
+        
         self.SkipBlocksDown = nn.ModuleList(
             [
             SkipBlock_simple(
@@ -287,6 +245,7 @@ class SDL_skip_simple(nn.Module):
                 use_activation = opt["use_activation"][i],
                 use_conv = opt["use_conv"],
                 use_eigenvals = opt["use_eigenvals"],
+                use_norm_att = opt["use_norm_att"] if 'use_norm_att' in opt else False,
                 use_norm = opt["use_norm"] if 'use_norm' in opt else False,
                 bias = opt["bias"],
                 reset = opt["reset"] if "reset" in opt else False,
@@ -294,7 +253,11 @@ class SDL_skip_simple(nn.Module):
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 sqrt = opt["sqrt"] if "sqrt" in opt else True,
                 up = False,
-                use_weights = True if i == M-1 else False
+                use_weights = True if i == M-1 else False,
+                flatten = opt["flatten"] if "flatten" in opt else False,
+                n_heads = opt["n_heads"] if "n_heads" in opt else 0,
+                value = opt["value"] if "value" in opt else False,
+                proj = opt["proj"] if "proj" in opt else True,
 
                 
             )
@@ -311,9 +274,10 @@ class SDL_skip_simple(nn.Module):
                 prior_coef = opt["prior_coef"],
                 activation = opt["activation"],
                 dropout = opt["dropout"] if 'dropout' in opt else 0,
-                use_activation = opt["use_activation"][i],
+                use_activation = opt["use_activation"][-i-1],
                 use_conv = opt["use_conv"],
                 use_eigenvals = opt["use_eigenvals"],
+                use_norm_att = opt["use_norm_att"] if 'use_norm_att' in opt else False,
                 use_norm = opt["use_norm"] if 'use_norm' in opt else False,
                 bias = opt["bias"],
                 reset = opt["reset"] if "reset" in opt else False,
@@ -321,12 +285,19 @@ class SDL_skip_simple(nn.Module):
                 Skip = opt["Skip"] if "Skip" in opt else 2,
                 sqrt = opt["sqrt"] if "sqrt" in opt else True,
                 up = True,
-                use_weights = True if i == 0 else False
+                use_weights = True if i == 0 else False,
+                flatten = opt["flatten"] if "flatten" in opt else False,
+                n_heads = opt["n_heads"] if "n_heads" in opt else 0,
+                value = opt["value"] if "value" in opt else False,
+                proj = opt["proj"] if "proj" in opt else True,
 
                 
             )
             for i in range(M)]
         )
+
+
+        self.div = Partial_Derivative(self.Pai[-1],0.01,0.05,(phi[-1].size(0),3))
         
         self.gate = opt["gate"]
         if opt["gate"]:
@@ -347,7 +318,8 @@ class SDL_skip_simple(nn.Module):
                            up = True,
 
                            )
-        
+
+
         del phi
         del Spectral_M_down
         torch.cuda.empty_cache()
@@ -385,15 +357,22 @@ class SDL_skip_simple(nn.Module):
         z = x        
         for SB in  self.SkipBlocksUp:
             x = SB(x,weights)
-            
-        x = self.SkipUp(x,z,weights)
         
-        return x
+        x = self.SkipUp(x,z,weights)
+        y = x
+
+        for P in self.Pai:
+            x = P(x)
+            
+        x = self.div(x) + x
+        
+        return x + y
         
     def forward(self, x):
         
-        x = self.encoder(x)
-        x = self.decoder(x)
+        y = self.encoder(x)
+        x = self.decoder(y)
+
 
         return x
     

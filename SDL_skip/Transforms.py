@@ -18,6 +18,7 @@ class RandomFlip(object):
         self.p = p
     
     def __call__(self, verts):
+        #print("flip: ",self.axis)
         if random.random() < self.p:
             pos = verts.clone()
             pos[..., self.axis] = -pos[..., self.axis]
@@ -79,6 +80,7 @@ class RandomRotate(object):
         self.p = p
 
     def __call__(self, verts):
+        #print("rot: ",self.axis)
         if random.random() < self.p:
             pos = verts.clone()
             degree = math.pi * random.uniform(*self.degrees) / 180.0
@@ -100,3 +102,90 @@ class RandomRotate(object):
     def __repr__(self):
         return '{}({}, axis={})'.format(self.__class__.__name__, self.degrees,
                                         self.axis)
+    
+class AddGaussianNoise(object):
+    """Adds Gaussian noise to vertex positions.
+
+    Args:
+        sigma (float): Standard deviation of the Gaussian noise.
+    """
+    def __init__(self, sigma: float, p= 0.5):
+        self.sigma = sigma
+        self.p = p
+
+    def __call__(self, verts: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            verts (torch.Tensor): Tensor of shape (..., D) representing vertex coordinates.
+
+        Returns:
+            torch.Tensor: Noisy vertices of the same shape.
+        """
+        if random.random() < self.p:
+            
+            # Draw noise from N(0, sigma^2) for each coordinate
+            noise = torch.randn_like(verts) * self.sigma
+            return verts + noise
+        else:
+            return verts
+ 
+def rename(path,mean,sd,norm,sym):
+    if mean is not None:
+        path = path[:-3] + "_mean.pt"
+    
+    if sd is not None:
+        path = path[:-3] + "_sd.pt"
+        
+    if norm:
+        path = path[:-3] + "_norm.pt"
+        
+    if sym == "sym" or sym == "asym":
+        path = path[:-3] + "_sym.pt"
+
+    return path        
+
+class SpectralInterpolation(object):
+    def __init__(self, dataset, phi, k, root_dir, mu=0.5, sigma=0.5, p=0.5, mean = None, sd = None, norm = None, sym =None):
+        self.dataset = dataset
+        self.phi = torch.tensor(phi.T).float()
+        self.k = k
+        self.mu = mu
+        self.sigma = sigma
+        self.p = p
+        self.root_dir = root_dir
+        
+        self.mean = mean
+        self.sd = sd
+        self.norm = norm
+        self.sym = sym
+
+    def __call__(self, verts):
+        #verts not needed take two random meshes and spectracl interpolate
+        if random.random() < self.p:
+            
+            phi_k = self.phi[:self.k,:]
+
+            
+            idx = random.randrange(len(self.dataset))
+            idx2 = random.randrange(len(self.dataset))
+            
+            path = self.root_dir+"\\processed\\"+self.dataset.Name.iloc[idx]+".pt"
+            path2 = self.root_dir+"\\processed\\"+self.dataset.Name.iloc[idx2]+".pt"
+            
+            path = rename(path,self.mean,self.sd,self.norm,self.sym)
+            path2 = rename(path2,self.mean,self.sd,self.norm,self.sym)
+            
+            X1 = torch.load(path)['points']
+            X2 = torch.load(path2)['points']
+
+            
+            delta = X2 - X1
+            rho = torch.normal(mean=self.mu, std=self.sigma, size=(self.k,))
+
+            # Create a diagonal matrix from the vector
+            diag = torch.diag(rho)# k×k
+
+            offset = phi_k.T @ (diag @ (phi_k @ delta))
+            verts = X1 + offset
+
+        return verts

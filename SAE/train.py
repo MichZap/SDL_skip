@@ -60,7 +60,7 @@ def train_bf(config):
     
     
     
-    train_set, val_set = load_data(config["p"],config["root_dir"],config["folder"],[0,1,2],eig_vecs, config["typ"])
+    train_set, val_set = load_data(config["p"],config["root_dir"],config["folder"],[0,1,2],eig_vecs, config["typ"],config["flip"],config["rot"],config["sigma"],config["aug_mean"],config["comp"])
 
     trainloader = DataLoader(train_set,batch_size=config["train_batch_size"],shuffle=True)
     valloader = DataLoader(val_set,batch_size=config["test_batch_size"])

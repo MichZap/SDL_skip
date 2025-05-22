@@ -26,7 +26,7 @@ torch.backends.cudnn.deterministic = True
 #Settings
 config = {
   "depth": 2,                   # model depth 0 pools directly to the latent size 
-  "nb_freq": [4096,1024,256,170],   # number of eigenvectors considered, here i,m and j from illustration
+  "nb_freq": [4096,1024,256,85],   # number of eigenvectors considered, here i,m and j from illustration
   "device": "cuda",
   "hidden_dim": [64]*7,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
   "conv_size": [1024]*7,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
@@ -41,7 +41,7 @@ config = {
   "use_norm_att":False,          # in case of use_att True determine if the attentionscore gets normalized
   "sqrt":False,                  # in case of use_att True determine if the attentionscore gets scaled by sqrt of dim
   "n_heads":0,                  # in case of use_att True determine the number of heads, n_heads = 0 and n_heads = 1 slightly different implementation
-  "value":False,                 # in case of multihead attention, use additional 3x3 value matrix
+  "value":False,                 # in case of multihead attention, use additional 3x3 value matrix^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   "bias":False,                 # use bias for linear layers
   "p":0,                        # augmentation probability for flipping and rotation per axis
   "reset":True,                 # use axvier uniform weight initialization instead of pytorch default
@@ -63,8 +63,7 @@ config = {
 ## folder where .pt-files will be stored 
 root_dir = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes\SDL'
 ## folder containing test ply-files
-folder = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\addTestData\procrustes'
-folder = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\old+new'
+folder = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes'
 ## path to a procrustes alligned ply file from the training data
 path_train = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes\uu5t1_LSCM_fix573_190903120253_R_FNN_woHat_procr.ply"
 ## folder containing eigenvalues and eigenvectors
@@ -72,7 +71,7 @@ path_decomp = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP'
 
 m_path = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes\mean_BBF.npy"
 mat_path = r"C:\Users\Michael\Downloads\T8_SymmetrizedTemplate.mat"
-out_path = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Output\SDL_skip'
+out_path = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Output\SDL_skip\paper\42'
 example_path = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data_Celi_3DGCN\Data\Synthetic_3D_face_00001.ply"
 
 
@@ -90,7 +89,7 @@ eig_vals = eig_vals[:freq]
 eig_vecs = eig_vecs[:,:freq]
 
 model = SDL_skip(config,eig_vecs,eig_vals)
-PATH = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Weights\SDL_skip\deep2 Paper"+"\\"+str(fr)+"_SDL_skip.pt"
+PATH = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Weights\SDL_skip\deep2 Paper\org data"+"\\"+str(fr)+"_SDL_skip.pt"
 # Load the state dict from file
 state_dict = torch.load(PATH)
 
@@ -104,7 +103,11 @@ model.cuda()
 def interpolate(Lat_space,i,j,alpha,model,ply,df,out_path,fr,mean):
     inter = torch.tensor(Lat_space[i]*alpha+Lat_space[j]*(1-alpha)).unsqueeze(0).cuda()
     out = model.decoder(inter).detach().cpu().numpy()[0] + mean
-    name = df.Name[i] +"_"+ str(alpha)+"_"+ df.Name[j]
+    
+    SSH = np.sqrt(((out - out.mean(0))**2).sum())
+    out = out/SSH
+    
+    name = str(i)+"_"+str(j)+"_"+str(alpha)+"_"+df.Name[i] +"_"+ df.Name[j]
     path = out_path+"/"+str(name)+"_"+str(fr)+".ply"
     export_ply(ply,path,out)
 
@@ -186,8 +189,10 @@ def convergence(model, mean, folder,root_dir, mat = None):
         
 #test interpolation
 ply = PlyData.read(example_path)
-# for alpha in np.arange(-1, 2.25, 0.25):
-#     interpolate(Lat_space,0,10,alpha,model,ply,Babyface_df_test,out_path,fr,mean)
+for alpha in np.arange(0, 1.25, 0.25):
+    interpolate(Lat_space,54,61,alpha,model,ply,Babyface_df_test,out_path,fr,mean)
+    interpolate(Lat_space,32,114,alpha,model,ply,Babyface_df_test,out_path,fr,mean)
+
         
 
         
@@ -234,11 +239,14 @@ def sample(n_samples,model,ply,mean,array,out_path,fr,flatten = False,use_mask =
             SL_t = torch.tensor(SL).unsqueeze(0).cuda().float()
             out = model.decoder(SL_t).detach().cpu().numpy()[0] + mean
             
+            SSH = np.sqrt(((out - out.mean(0))**2).sum())
+            out = out/SSH
+            
             path = out_path+"/"+str(name)+"_"+str(fr)+"_"+str(flatten)+"_"+str(use_mask)+str(thres)+str(GCV)+str(alpha)+str(max_iter)+".ply"
             export_ply(ply,path,out)
 
     
 
-sample(100,model,ply,mean,Lat_space,out_path,fr,True,False,0,True,alpha=175,max_iter = 10000,mode = "cd")
+sample(100,model,ply,mean,Lat_space,out_path,fr,True,False,0,False,alpha=175,max_iter = 10000,mode = "cd")
 
 

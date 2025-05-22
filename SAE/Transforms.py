@@ -3,6 +3,7 @@ import torch
 import numbers
 import math
 
+
 #transforms based on pytrochgeometric fucntions
 class RandomFlip(object):
     """Flips node positions along a given axis randomly with a given
@@ -100,3 +101,65 @@ class RandomRotate(object):
     def __repr__(self):
         return '{}({}, axis={})'.format(self.__class__.__name__, self.degrees,
                                         self.axis)
+    
+#since spectral decomp is orthonormal i.e phi_k.T*phi_k = I_k we can add the nosie also directly in the spectral domain
+class AddGaussianNoise(object):
+    """Adds Gaussian noise to vertex positions.
+
+    Args:
+        sigma (float): Standard deviation of the Gaussian noise.
+    """
+    def __init__(self, sigma: float, p= 0.5):
+        self.sigma = sigma
+        self.p = p
+
+    def __call__(self, verts: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            verts (torch.Tensor): Tensor of shape (..., D) representing vertex coordinates.
+
+        Returns:
+            torch.Tensor: Noisy vertices of the same shape.
+        """
+        if random.random() < self.p:
+            
+            # Draw noise from N(0, sigma^2) for each coordinate
+            noise = torch.randn_like(verts) * self.sigma
+            return verts + noise
+        else:
+            return verts
+        
+class SpectralInterpolation(object):
+    def __init__(self, dataset, phi, k, root_dir, mu=0.5, sigma=0.5, p=0.5):
+        self.dataset = dataset
+        self.phi = torch.tensor(phi.T).float()
+        self.k = k
+        self.mu = mu
+        self.sigma = sigma
+        self.p = p
+        self.root_dir = root_dir
+
+    def __call__(self, verts):
+        #verts not needed take two random meshes and spectracl interpolate
+        if random.random() < self.p:
+            
+            phi_k = self.phi[:self.k,:]
+            
+            idx = random.randrange(len(self.dataset))
+            idx2 = random.randrange(len(self.dataset))
+            
+            path = self.root_dir+"\\processed\\"+self.dataset.Name.iloc[idx]+"_org.pt"
+            path2 = self.root_dir+"\\processed\\"+self.dataset.Name.iloc[idx2]+"_org.pt"
+            
+            X1 = torch.load(path)
+            X2 = torch.load(path2)
+            
+            delta = X2 - X1
+            rho = torch.normal(mean=self.mu, std=self.sigma, size=(self.k,))
+
+            # Create a diagonal matrix from the vector
+            diag = torch.diag(rho)           # k×k
+            offset = phi_k.T @ (diag @ (phi_k @ delta))
+            verts = X1 + offset
+            verts = torch.matmul(self.phi,verts)
+        return verts

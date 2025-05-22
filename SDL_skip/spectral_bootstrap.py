@@ -18,11 +18,14 @@ import matplotlib.pyplot as plt
 
 path_decomp = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP'
 folder = r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\SAE_LP\procrustes'
-outpath =  r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Output\Augmentation\Samples"
+outpath =  r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Output\Spectral\rec"
 typ = "BBF"
-freq = 200
+freq = 60
 n_samples =100
 bootstrap = False
+sample = False
+rec_ = False
+interpolation = True
 
 f = 31027 
  
@@ -52,14 +55,17 @@ df_train,df_val = train_test_split(Babyface_df,test_size = 0.2)
 mean=meanply(df_train, typ = typ)
 
 k = len(df_train)
-lat_list=[]
+lat_list = []
+rec_list = []
 for idx in range(k):
     raw_path = df_train.Path.iloc[idx]
     ply = PlyData.read(raw_path)
     vertex = ply["vertex"]
     verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)-mean
     lat = np.matmul(eig_vecs.T,verts_init)
+    rec = np.matmul(eig_vecs,lat) + mean
     lat_list.append(lat)
+    rec_list.append(rec)
 
 
 
@@ -71,12 +77,15 @@ def create_mapped_array(randarray, list_of_arrays):
             mapped_array[i,j] = list_of_arrays[randarray[i,j]][i,j]
     return mapped_array 
 
-def exportply(array,path,ply,freq):
+def exportply(array,path,ply,freq,name = None):
     ply["vertex"]["x"] = array[:,0]
     ply["vertex"]["y"] = array[:,1]
     ply["vertex"]["z"] = array[:,2]
-    now = datetime.now().strftime("%Y-%m-%d%H-%M-%S")
-    new_path = path+"/"+str(freq)+"_"+str(now)+".ply"
+    if name == None:
+        now = datetime.now().strftime("%Y-%m-%d%H-%M-%S")
+        new_path = path+"/"+str(freq)+"_"+str(now)+".ply"
+    else:
+        new_path = path+"/"+name+".ply"
     ply=PlyData(ply, text = False)
     ply.write(new_path)
 
@@ -90,7 +99,7 @@ if bootstrap:
         exportply(sample,outpath,ply,freq)
 
 
-else:
+if sample:
     lat_list_array = np.array(lat_list)
     reshaped_array = lat_list_array.reshape((92,-1))
 
@@ -114,4 +123,36 @@ else:
     for i in range(n_samples):
         time.sleep(1)
         exportply(samples[i],outpath,ply,freq)
+        
+if rec_:
+    i = 0
+    for rec in rec_list[:4]:
+        name = Name[i]
+        out_path = outpath + "\\"+str(freq)
+        os.makedirs(out_path,exist_ok = True)
+        exportply(rec,out_path,ply,freq,name)
+        i = i+1
+        
+if interpolation:
+    raw_path1 = df_train.Path.iloc[0]
+    ply = PlyData.read(raw_path1)
+    vertex = ply["vertex"]
+    X1 = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
+    
+    raw_path2 = df_train.Path.iloc[1]
+    ply = PlyData.read(raw_path2)
+    vertex = ply["vertex"]
+    X2 = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
+    
+    eig_vecs = np.load(outfile_vec)
+    for j in range(5):
+        rho = np.random.normal(0.5, 0.5, freq)
+        rho = np.pad(rho, (0, len(eig_vecs) - freq), mode='constant')
+        
+        inter = X1 + eig_vecs @ np.diag(rho) @ eig_vecs.T @ (X2 -X1)
+        name = "inter" + Name[0] + "_" + Name[1] + str(freq) + "_"+ str(j)
+        exportply(inter,outpath,ply,freq,name)
+    
+    
+
 
