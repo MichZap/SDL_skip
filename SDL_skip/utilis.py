@@ -29,14 +29,13 @@ def gnn_model_summary(model):
 
           
 #calculate mean face
-def meanply(Data, typ = "Coma", sym = False, SSH = False):
+def meanply(Data, typ = "Coma", sym = False, norm = False):
     
     if sym != False:
         sym = True
     
-    file = f"mean_sym_{int(sym)}_SSH_{int(SSH)}_{typ}.npy"
+    file = f"mean_sym_{int(sym)}_SSH_{int(norm)}_{typ}.npy"
         
-    
     if os.path.isfile(file):
         m = np.load(file)
     else:
@@ -47,7 +46,7 @@ def meanply(Data, typ = "Coma", sym = False, SSH = False):
                 vertex = Data[idx]
                 verts_init = np.stack((vertex[:n], vertex[n:2*n], vertex[2*n:3*n]),axis=1)
                 verts_init = verts_init.astype('float32')
-                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum()) if SSH == True else 1
+                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum()) if norm == True else 1
                 verts_init = verts_init/SSH
                 
                 if i==0:
@@ -62,7 +61,7 @@ def meanply(Data, typ = "Coma", sym = False, SSH = False):
                 vertex=ply["vertex"]
                 verts_init = np.stack((vertex['x'], vertex['y'], vertex['z']),axis=1)
                 verts_init = verts_init.astype('float32')
-                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum())/verts_init.shape[0] if SSH == True else 1
+                SSH = np.sqrt(((verts_init - verts_init.mean(0))**2).sum())/verts_init.shape[0] if norm == True else 1
                 verts_init = verts_init/SSH
                 
     
@@ -71,6 +70,7 @@ def meanply(Data, typ = "Coma", sym = False, SSH = False):
                     i=i+1
                 else:
                     mean=mean+verts_init
+                    
         
         sc = 1000 if typ == "Coma" else 1    
         m = mean/len(Data)*sc

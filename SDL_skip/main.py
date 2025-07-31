@@ -32,12 +32,12 @@ config = {
     "min_delta":0.0000005,                # parameter for early stopping tolerance
     
     #model base settings:
-    "depth": 2,                   # model depth 0 pools directly to the latent size 
-    "nb_freq": [4096,1024,256],                # number of eigenvectors considered, here i,m and j from illustration
-    "hidden_dim": [64]*8,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+    "depth": 3,                   # model depth 0 pools directly to the latent size 
+    "nb_freq": [8192,4096,2048,1024,512,256,128],                # number of eigenvectors considered, here i,m and j from illustration
+    "hidden_dim": [64]*16,         # see d in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
     "use_conv": True,             # use linear(4,c) and linear(c,3) from illustration
     "use_eigenvals":True,         # use eigenvalue encoding
-    "conv_size": [1024]*8,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
+    "conv_size": [1024]*16,        # see c in illustration, can be varied by block, number of blocks = sum_{i=0}^{depth}2**i
     "prior_coef": 0.4,            # weight w initialization for the skip connection, the learnable component gets scaled by 1-w
     
     #model additional settings:
@@ -67,13 +67,13 @@ config = {
     "eb_dim":0,                  # in case of vertex initialization: None => no embedding, else verteices are embedded to eb_dim before attention
 
     #augmentation settings
-    "p":0,                      # augmentation probability for flipping and rotation per axis
-    "k":0,                        # max amount of consecutive augmentations
+    "p":0.5,                      # augmentation probability for flipping and rotation per axis
+    "k":1,                        # max amount of consecutive augmentations
     "deg":180,                     #rotation degree for augmentation
     "flip":False,                 #False disables flipping augmentation
     "rot":False,                 #Rotation augmentation
     "sigma":0,                   #Sigma param for guassian noise augmentation sigma = 0 => disabled
-    "comp":0,                    #number of components used for spectral interpolation augmentation, comp=0 => disabled
+    "comp":100,                    #number of components used for spectral interpolation augmentation, comp=0 => disabled
     "aug_mean":False,            #False is default, True augmentations are done to the original instead of the deviations to the mean
     "add_data":False,             # if we use addition data from folder_add, not considered in train test split
     "sym":"sym",                  # False default, "sym" adds mirrored and symmetric mesh, "aysm" additional transfers asymtries from one face to another requires indices for mirroring

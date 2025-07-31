@@ -7,17 +7,20 @@ Created on Tue Jul 16 17:24:48 2024
 
 import numpy as np
 import os
-import scipy.io
+import scipy.io as sio
 from plyfile import PlyData
+
 from scipy.linalg import orthogonal_procrustes
+from scipy.spatial.transform import Rotation as RT
 
 
 #mat_path = r"C:\Users\Michael\Downloads\T8_SymmetrizedTemplate.mat"
+#fm_path = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data_Celi_3DGCN\FaceModel_GMM_MVN.mat"
 #ply_path = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\old+new\008_16092014_procr.ply"
 #ply_path_temp = r"C:\Users\Michael\PhD_MZ\Autoencoder Babyface\Data\old+new\517_19082010_procr.ply"
 
 
-def symtrans(ply_path,mat_path):
+def symtrans(ply_path,mat_path,fm_path = None):
     #new path to save modified files
     folder, filename_with_extension = os.path.split(ply_path)
     filename_without_extension, _ = os.path.splitext(filename_with_extension)
@@ -32,7 +35,7 @@ def symtrans(ply_path,mat_path):
     
     else:
         #load 2d projection
-        comm2D_verts = scipy.io.loadmat(mat_path)['comm2D_f'][0]["verts"][0]
+        comm2D_verts = sio.loadmat(mat_path)['comm2D_f'][0]["verts"][0]
         NV = comm2D_verts.shape[1]
         
         #calcualte symmetric indices
@@ -47,14 +50,30 @@ def symtrans(ply_path,mat_path):
         #load ply    
         verts_init, ply =load_ply(ply_path)
         verts_cent = verts_init-np.mean(verts_init,0)
+        
+        if fm_path != None:
+            #align mesh such that the center in between the eyes is 0,0,0 and the eyes lie on 1,0,0
+            landmark_verts = list(sio.loadmat(fm_path)['FaceModel']['landmark_verts'][0][0][0]-1)
+            exR_idx = landmark_verts[1]
+            exL_idx = landmark_verts[3]
+            prn_idx = landmark_verts[7]
+            
+            exR = verts_cent[exR_idx]
+            exL = verts_cent[exL_idx]
+            prn = verts_cent[prn_idx]
+            
+            verts_init = align_mesh(exR,exL,prn,verts_init)
     
         #apply symmetry transform
         verts_sym = verts_init[symmIdxs]
         A = np.array([-verts_sym[:,0],verts_sym[:,1],verts_sym[:,2]]).T
         
-        #apply procrustes transform
-        R,_=orthogonal_procrustes(A,verts_cent)
-        pos=np.matmul(A,R).astype('float32')
+        if fm_path == None:
+            #apply procrustes transform
+            R,_ = orthogonal_procrustes(A,verts_cent)
+            pos = np.matmul(A,R).astype('float32')
+        else:
+            pos = A
         
         export_ply(ply,new_path,pos)  
     
@@ -153,6 +172,69 @@ def export_ply(ply,path,array):
     modified_ply = PlyData(ply, text = False)
     modified_ply.write(path)
 
+def align_vector(v1, v2):
+
+    #gives matrix to rotate v1 to v2    
+
+    v1 = v1 / np.linalg.norm(v1)
+    v2 = v2 / np.linalg.norm(v2)
+
+    cos_theta = np.clip(np.dot(v1, v2), -1.0, 1.0)
+    angle = np.arccos(cos_theta)
+
+    axis = np.cross(v1, v2)
+    axis_norm = np.linalg.norm(axis)
+
+    if axis_norm < 1e-8:
+        return np.eye(3)  # No rotation needed
+    else:
+        r = RT.from_rotvec((axis / axis_norm) * angle)
+        return r.as_matrix()
+
+def align_mesh(exR,exL,prn,x):
+    #aligns mesh by eyes and nose landmarks with x and y axis
+    
+    eye_vec = exR - exL                     # Vector from left to right eye
+    eye_center = (exL + exR) / 2            # Midpoint between eyes
+    T = -eye_center                         # Translate such that eye_center is at origin
+
+    # Align eye vector to X-axis
+    R1 = align_vector(eye_vec, np.array([1.0, 0.0, 0.0]))
+    
+    x = (x + T) @ R1
+    exL = (exL + T) @ R1
+    exR = (exR + T) @ R1
+    prn = (prn + T) @ R1
+    
+    # Align face normal to Z-axis
+    v_eye = exR - exL
+    v_nose = prn - (exL + exR) / 2
+    face_normal = np.cross(v_eye, v_nose)
+    R2 = align_vector(face_normal, np.array([0.0, 0.0, 1.0]))
+    x = x  @ R2
+
+    return x
+
+#calculate P
+# from scipy.sparse import csr_matrix
+
+# NV = len(symmIdxs)
+# row_indices = np.arange(NV)
+# col_indices = symmIdxs
+# data = np.ones(NV)
+
+# P = csr_matrix((data, (row_indices, col_indices)), shape=(NV, NV))
+# sp.save_npz(r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\SymEqui\tmp\P.npz', P)
+# Convert to dense numpy array
+#P_dense = P.toarray()
+
+# Convert to PyTorch tensor
+#P_tensor = torch.from_numpy(P_dense).float()
+
+# Compute eigenvalues and eigenvectors
+#_, E = torch.linalg.eig(P_tensor)
+#E = E.real
+#torch.save(E,r'C:\Users\Michael\PhD_MZ\Autoencoder Babyface\SymEqui\tmp\E.pt')
     
 #print(symtrans(ply_path,mat_path))
 #print(aysmtrans(ply_path_temp,ply_path,mat_path))    
